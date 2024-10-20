@@ -56,7 +56,7 @@ const App = () => {
     var c1 = Math.random();
     var c2 = Math.random();
     var c3 = Math.random();
-    console.log(c1+" "+c2+" " +c3)
+    console.log(c1 + " " + c2 + " " + c3)
     material.diffuseColor = new BABYLON.Color3(c1, c2, c3);
     plane.material = material;
 
@@ -64,7 +64,7 @@ const App = () => {
     const dragBehavior = new BABYLON.PointerDragBehavior({
       dragPlaneNormal: new BABYLON.Vector3(0, 0, 1) // Sürükleme düzlemi olarak Z ekseni üzerinde hareket ettiriyoruz
     });
-    
+
     plane.addBehavior(dragBehavior); // Davranışı ekliyoruz
 
     plane.actionManager = new BABYLON.ActionManager(sceneRef.current);
@@ -137,24 +137,34 @@ const App = () => {
       setSelectedShape(null); // Seçimi sıfırla
     }
   };
-  const exportShapes = () => {
-    console.log(shapes)
-    console.log(shapes[0].color)
-    const shapesData = shapes
-      .filter((shape) => shape.position && shape.position.asArray) // position ve asArray var mı kontrol et
-      .map((shape) => ({
+// Export JSON (tüm şekilleri dışa aktar)
+const exportShapes = () => {
+  try {
+    const shapesData = shapes.map((shape) => {
+      // Pozisyonu sadece x, y, z koordinatları olarak alıyoruz
+      const shapeData = {
         type: shape.type,
-        position: shape.position, // Pozisyonu array olarak al
-        color: shape.color, // Rengi array olarak al
-      }));
-    const jsonData = JSON.stringify(shapesData, null, 2);
+        position: shape.position ? [shape.position.x, shape.position.y, shape.position.z] : null, // Pozisyonu array'e çeviriyoruz
+        color: shape.material && shape.material.diffuseColor ? shape.material.diffuseColor : shape.color ? shape.color : null
+      };
+      
+      return shapeData;
+    });
+
+    const jsonData = JSON.stringify(shapesData, null, 2);  // JSON formatına çeviriyoruz
     const blob = new Blob([jsonData], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
     link.download = 'shapes.json';
     link.click();
-  };
+
+  } catch (error) {
+    console.error("JSON export sırasında hata oluştu:", error);
+  }
+};
+
+
 
   // Tüm öğeleri sil
   const deleteAllShapes = () => {
@@ -171,16 +181,28 @@ const App = () => {
       deleteSelectedShape();
     }
   };
-  // Import JSON (şekilleri içeri aktar)
-  const importShapes = (event) => {
-    const file = event.target.files[0];
-    const reader = new FileReader();
-    reader.onload = (e) => {
+  
+ // Import JSON (şekilleri içeri aktar)
+const importShapes = (event) => {
+  const file = event.target.files[0];
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
       const importedShapes = JSON.parse(e.target.result);
       deleteAllShapes(); // Eski şekilleri temizle
+
       importedShapes.forEach((shape) => {
-        const position = BABYLON.Vector3.FromArray(shape.position);
+        // Pozisyonun array olduğunu kontrol ediyoruz ve Vector3'e çeviriyoruz
+        if (!shape.position || !Array.isArray(shape.position)) {
+          console.error('Geçersiz pozisyon verisi:', shape.position);
+          return; // Hatalı pozisyon varsa bu shape'i yüklemiyoruz
+        }
+
+        // Array'den x, y, z pozisyonlarını alarak Vector3'e çeviriyoruz
+        const position = new BABYLON.Vector3(shape.position[0], shape.position[1], shape.position[2]);
         const color = BABYLON.Color3.FromArray(shape.color);
+
+        // Şekil tipine göre ekliyoruz
         switch (shape.type) {
           case 'rect':
             addRectangle(position, color);
@@ -192,12 +214,19 @@ const App = () => {
             addLine(position, color);
             break;
           default:
+            console.error('Bilinmeyen şekil tipi:', shape.type);
             break;
         }
       });
-    };
-    reader.readAsText(file);
+    } catch (error) {
+      console.error('JSON import hatası:', error);
+    }
   };
+  reader.readAsText(file);
+};
+
+
+
   return (
     <div tabIndex={0} onKeyDown={handleKeyDown} style={{ outline: 'none' }}>
       <button onClick={addRectangle}>Add Rectangle</button>
